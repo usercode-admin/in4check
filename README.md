@@ -46,3 +46,7 @@ Regulatory Compliance: Ensure your activities align with local cybersecurity law
 Granular Permission Management: Never click "Allow" on location or camera prompts from untrusted, obscure, or third-party domains.
 Security Extensions: Use browser extensions that restrict unauthorized JavaScript execution or block cross-site tracking.
 Privacy-Focused Browsers: Utilize browsers (like Brave or Tor) that natively offer strict fingerprinting protection and tighter permission controls.
+# IMG
+<p align="center">
+  <img src="IMG.jpeg" alt="Tên ảnh" width="600">
+</p>
